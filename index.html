@@ -554,5 +554,20 @@
   document.addEventListener('DOMContentLoaded', function(){ var btnImport = document.getElementById('btnImport'); if(btnImport){ btnImport.addEventListener('click', importFromExcel); } });
 })();
 </script>
+<script>(function(){
+  // Anlık görünüm: sekmeler/pc'de aynı etki alanı içinde senkron
+  const chName='sekar-onay-live';
+  const bc = ('BroadcastChannel' in window)? new BroadcastChannel(chName) : null;
+  function safeParse(v){ try{return JSON.parse(v||'[]');}catch(_){return [];} }
+  function push(){ try{ const data={ type:'SYNC', records: safeParse(localStorage.getItem('onayRecords')), counterMap: safeParse(localStorage.getItem('onayCounterMap')), onayCounter: Number(localStorage.getItem('onayCounter')||0) }; if(bc){ bc.postMessage(data); } }catch(_){} }
+  if(bc){ bc.onmessage=(e)=>{ const d=e && e.data; if(!d||d.type!=='SYNC') return; window.onayRecords = Array.isArray(d.records)? d.records : []; try{ localStorage.setItem('onayCounterMap', JSON.stringify(d.counterMap||{})); localStorage.setItem('onayCounter', String(d.onayCounter||0)); }catch(_){ } if(typeof renderOnay==='function'){ renderOnay(); } if(typeof toast==='function'){ toast('Anlık güncelleme'); } }; }
+  // Diğer pencereler için localStorage event
+  window.addEventListener('storage', (e)=>{ if(e && e.key==='onayRecords'){ window.onayRecords = safeParse(e.newValue); if(typeof renderOnay==='function'){ renderOnay(); } if(typeof toast==='function'){ toast('Anlık güncelleme'); } } });
+  // save() fonksiyonunu sarmala: onayRecords güncellendiğinde yayınla
+  if(typeof window.save==='function'){
+    const _save = window.save;
+    window.save = function(k,d){ _save(k,d); if(k==='onayRecords'){ try{ localStorage.setItem('onayRecords', JSON.stringify(d)); }catch(_){ } push(); } };
+  }
+})();</script>
 </body>
 </html>
