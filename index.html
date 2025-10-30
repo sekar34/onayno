@@ -76,6 +76,7 @@
       <input type="file" id="excelInput" accept=".xlsx,.xls" />
       <button type="button" id="btnImport">Excel'den Yükle</button>
       <button type="button" id="btnTemplate">Şablonu İndir (Excel)</button>
+      <button type="button" id="btnExport">Excel'e Aktar (Görünen)</button>
       <button type="button" id="btnClearAll" style="margin-left:8px">Tüm Kayıtları Sil</button>
       <span class="hint">Beklenen başlıklar: <b>Onay No (opsiyonel)</b>, Tarih, Plaka, Firma, Km, Servis, Durum, Açıklama, Tutar, Yansıtma, Fatura No, Fatura Tutarı</span>
     </div>
@@ -300,12 +301,40 @@
   function downloadTemplate(){ const wb=XLSX.utils.book_new(); const ws=XLSX.utils.aoa_to_sheet([EXPECTED_HEADERS]); XLSX.utils.book_append_sheet(wb,ws,'OnayNo'); const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'}); const blob=new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='onayno_sablon.xlsx'; a.click(); URL.revokeObjectURL(a.href); }
   async function importFromExcel(){ const inp=document.getElementById('excelInput'); if(!inp.files||!inp.files[0]){ toast('Lütfen bir Excel dosyası seçin.'); return; } const reader=new FileReader(); const file=inp.files[0]; reader.onload=async (e)=>{ const data=new Uint8Array(e.target.result); let rows=[]; try{ const wb=XLSX.read(data,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}); }catch(err){ const txt=new TextDecoder('utf-8').decode(data); rows=txt.split(/\r?\n/).map(r=>r.split(',')); } if(!rows.length){ toast('Dosya boş görünüyor.'); return; } const header=rows[0].map(h=>h.trim()); const idx=(n)=>header.indexOf(n); const hasOnayNo=header.includes('Onay No'); const mapIdx={ OnayNo: hasOnayNo? idx('Onay No'):-1, Tarih:idx('Tarih'), Plaka:idx('Plaka'), Firma:idx('Firma'), Km:idx('Km'), Servis:idx('Servis'), Durum:idx('Durum'), Açıklama:idx('Açıklama'), Tutar:idx('Tutar'), Yansıtma:idx('Yansıtma'), 'Fatura No':idx('Fatura No'), 'Fatura Tutarı':idx('Fatura Tutarı') }; let imported=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r||r.every(c=>String(c).trim()==='')) continue; const tarihISO=toISODate(r[mapIdx['Tarih']]); const provided=(mapIdx.OnayNo>=0? r[mapIdx.OnayNo]: ''); const providedNo=(provided!==undefined&&provided!==null&&String(provided).trim()!=='')? parseInt(String(provided).replace(/\D/g,''),10): null; let recNo=providedNo; if(!recNo) recNo=await allocateOnayNo(tarihISO); else { const y=(new Date(tarihISO||Date.now())).getFullYear(); const base=y*10000; const ref=db.collection('counters').doc(String(y)); await db.runTransaction(async(tx)=>{ const snap=await tx.get(ref); const last=(snap.exists && typeof snap.data().value==='number')? snap.data().value : base; if(recNo>last) tx.set(ref,{value:recNo},{merge:true}); }); } const rec={ no:recNo, tarih:tarihISO, plaka:(r[mapIdx['Plaka']]||'').toString().toUpperCase(), firma:(r[mapIdx['Firma']]||'').toString().toUpperCase(), km:toNumber(r[mapIdx['Km']]), servis:(r[mapIdx['Servis']]||'').toString().toUpperCase(), durum:(r[mapIdx['Durum']]||'').toString(), aciklama:(r[mapIdx['Açıklama']]||'').toString(), tutar:toNumber(r[mapIdx['Tutar']]), faturaNo:(r[mapIdx['Fatura No']]||'').toString(), faturaTutar:toNumber(r[mapIdx['Fatura Tutarı']]), faturaImage:'', yansitma:(r[mapIdx['Yansıtma']]||'').toString() }; await addRecordDirect(rec); imported++; } toast(imported+' kayıt içe aktarıldı'); }; reader.readAsArrayBuffer(file); }
 
+  // ==================== EXCEL DIŞA AKTAR ====================
+  function exportVisibleToExcel(){
+    const rows=[EXPECTED_HEADERS];
+    const data=applyFilters(onayRecords);
+    for(const r of data){
+      rows.push([
+        r.no ?? '',
+        toISODate(r.tarih) || '',
+        r.plaka || '',
+        r.firma || '',
+        r.km ?? '',
+        r.servis || '',
+        r.durum || '',
+        r.aciklama || '',
+        (r.tutar ?? 0),
+        r.yansitma || '',
+        r.faturaNo || '',
+        (r.faturaTutar ?? 0)
+      ]);
+    }
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'OnayNo');
+    XLSX.writeFile(wb,'onayno_aktar.xlsx');
+  }
+
   // ==================== ETKİNLİKLER ====================
   // Herkese açık: butonlar
   window.downloadTemplate = downloadTemplate; // Referans hatasını önlemek için global
+  window.exportVisibleToExcel = exportVisibleToExcel;
   document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('btnTemplate').addEventListener('click', downloadTemplate);
     document.getElementById('btnImport').addEventListener('click', importFromExcel);
+    document.getElementById('btnExport').addEventListener('click', exportVisibleToExcel);
     document.getElementById('btnClearAll').addEventListener('click', clearAllRecords);
 
     document.getElementById('onayForm').addEventListener('submit', async (e)=>{
@@ -390,6 +419,7 @@
   (function(){ const url=new URL(location.href); if(url.searchParams.get('runTests')!=='1') return; console.log('%c[TEST] start','color:#2563eb');
     console.assert(typeof window.downloadTemplate==='function','downloadTemplate yok');
     console.assert(typeof importFromExcel==='function' || true,'importFromExcel yok');
+    console.assert(typeof window.exportVisibleToExcel==='function','exportVisibleToExcel yok');
     const txt='A,B\nC,D'; const arr=txt.split(/\r?\n/); console.assert(arr.length===2,'regex split fail');
     // tarih & fark
     console.assert(toISODate('01.02.25')==='2025-02-01','toISODate dd.mm.yy');
