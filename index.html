@@ -517,6 +517,9 @@
   async function deleteRec(index){ const ok=await uiConfirm('Kaydı silmek istiyor musunuz?'); if(!ok) return; onayRecords.splice(index,1); save('onayRecords', onayRecords); renderOnay(); toast('Kayıt silindi'); }
   async function clearAllRecords(){ const ok=await uiConfirm('Tüm kayıtlar silinsin mi? Bu işlem geri alınamaz.'); if(!ok) return; onayRecords=[]; localStorage.removeItem('onayRecords'); counterMap={}; localStorage.setItem('onayCounterMap', JSON.stringify(counterMap)); onayCounter=YEAR_BASE_DEFAULT; localStorage.setItem('onayCounter', onayCounter); renderOnay(); toast('Tüm kayıtlar silindi ve sayaç sıfırlandı'); }
 
+  // Export to global to avoid scope/order issues
+  window.downloadTemplate = downloadTemplate;
+
   // ================= EVENTS (define–then–bind) =================
   document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('onayForm').addEventListener('submit', async (e)=>{
@@ -547,6 +550,7 @@
   // ================= LIGHT TESTS =================
   (function(){ const url=new URL(location.href); if(url.searchParams.get('runTests')!=='1') return; console.log('%c[TEST] start','color:#2563eb');
     // Mevcut testler
+    console.assert(typeof window.downloadTemplate==='function', 'downloadTemplate yok');
     console.assert(typeof importFromExcel==='function' || true, 'importFromExcel yok');
     const txt='A,B\nC,D'; const arr=txt.split(/\r?\n/); console.assert(arr.length===2,'regex split fail');
     const n1=nextOnayNo('2025-01-01'); const n2=nextOnayNo('2025-12-31'); console.assert(String(n1).startsWith('2025')&&n2===n1+1,'yıl bazlı sayaç');
