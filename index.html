@@ -247,14 +247,14 @@
     </div>
   </div>
 
-  {% raw %}
+  
 <script>
   // ================= CORE HELPERS =================
   const YEAR_BASE_DEFAULT = (new Date().getFullYear()) * 10000; // yıl bazlı başlangıç
   const save = (k, d) => localStorage.setItem(k, JSON.stringify(d));
   const load = (k) => JSON.parse(localStorage.getItem(k) || "[]");
   const fmtTL = (v) => v ? new Intl.NumberFormat('tr-TR', { style:'currency', currency:'TRY' }).format(v) : "";
-  const toNumber = (val) => { if(typeof val==='number') return val; const v=(val||'').toString().replace(/[\.\s]/g,'').replace(',','.'); const n=Number(v); return isNaN(n)?0:n; };
+  const toNumber = (val) => { if(typeof val==='number') return val; const v=(val||'').toString().replace(/[\.\u00A0\s]/g,'').replace(',','.'); const n=Number(v); return isNaN(n)?0:n; };
 
   function pad2(n){ return String(n).padStart(2,'0'); }
   function excelSerialToISO(n){
@@ -565,6 +565,6 @@
     const n1=nextOnayNo('2025-01-01'); const n2=nextOnayNo('2025-12-31'); console.assert(String(n1).startsWith('2025')&&n2===n1+1,'yıl bazlı sayaç');
     console.log('%c[TEST] ok','color:#16a34a'); })();
   </script>
-{% endraw %}
+
 </body>
 </html>
