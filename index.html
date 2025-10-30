@@ -2,6 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>SEKAR FİLO — ONAY NO</title>
   <!-- Excel için SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -12,8 +13,6 @@
     .topbar{ position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 16px; background:var(--green); color:#fff; box-shadow:0 2px 6px rgba(0,0,0,.12) }
     .brand{ font-weight:800; letter-spacing:.3px }
     .badge{ background:rgba(255,255,255,.15); padding:4px 8px; border-radius:8px; font-weight:700 }
-    .home-btn{ color:#fff; text-decoration:none; font-weight:700; border:1px solid rgba(255,255,255,.45); padding:8px 12px; border-radius:10px }
-    .home-btn:hover{ background:rgba(255,255,255,.14) }
     .page{ margin:20px; padding:20px; background:#fff; border-radius:10px; box-shadow:0 0 8px rgba(0,0,0,.08) }
 
     .toolbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0 }
@@ -68,7 +67,8 @@
     <div>
       <span class="brand">SEKAR FİLO</span>
       <span class="badge">ONAY NO</span>
-    </div></div>
+    </div>
+  </div>
 
   <div id="onay" class="page">
     <div class="toolbar">
@@ -245,7 +245,6 @@
     </div>
   </div>
 
-  {% raw %}
 <script>
   // ================= CORE HELPERS =================
   const YEAR_BASE_DEFAULT = (new Date().getFullYear()) * 10000; // yıl bazlı başlangıç
@@ -394,7 +393,20 @@
         </td>`;
       tb.appendChild(tr);
     });
-    renderPager(total,totalPages);
+    renderOnayPager();
+  }
+  function renderOnayPager(){
+    const filtered=applyFilters(onayRecords);
+    const total=filtered.length; const totalPages=Math.max(1, Math.ceil(total/50));
+    const el=document.getElementById('pager'); if(!el) return; el.innerHTML='';
+    const info=document.createElement('span'); info.className='info';
+    const start=(page-1)*50+1, end=Math.min(page*50,total); info.textContent=`${start}-${end}/${total}`;
+    const mk=(t,cb,dis=false)=>{const b=document.createElement('button');b.textContent=t;b.disabled=dis;b.onclick=cb;return b;};
+    el.appendChild(mk('⏮',()=>{page=1;renderOnay();}, page===1));
+    el.appendChild(mk('◀',()=>{page=Math.max(1,page-1);renderOnay();}, page===1));
+    el.appendChild(info);
+    el.appendChild(mk('▶',()=>{page=Math.min(totalPages,page+1);renderOnay();}, page===totalPages));
+    el.appendChild(mk('⏭',()=>{page=totalPages;renderOnay();}, page===totalPages));
   }
 
   // ================= UI HELPERS =================
@@ -507,26 +519,6 @@
 
   // ================= EVENTS (define–then–bind) =================
   document.addEventListener('DOMContentLoaded', ()=>{
-    // Ana Sayfa butonu: Flask (url_for), dosya modu (index.html) veya kök URL
-    const home = document.getElementById('homeLink');
-    if(home){
-      const jinjaUrl = home.getAttribute('data-url');
-      if(jinjaUrl && !jinjaUrl.includes('{{')){
-        home.href = jinjaUrl; // Flask ortamında
-      } else if(location.protocol === 'file:' || /\.html?$/.test(location.pathname)){
-        home.href = 'index.html'; // dosyadan açılıyorsa
-      } else {
-        home.href = '/'; // varsayılan
-      }
-      home.addEventListener('click', (e)=>{
-        const href = home.getAttribute('href')||'#';
-        if(href === '#'){
-          e.preventDefault();
-          if(history.length>1) history.back(); else location.assign('/');
-        }
-      });
-    }
-    // form submit
     document.getElementById('onayForm').addEventListener('submit', async (e)=>{
       e.preventDefault(); const f=new FormData(e.target); const rec=createRecordFromForm(f);
       const hasRecent = onayRecords.some(r=> r && r.plaka && r.tarih && r.plaka===rec.plaka && (diffDays(rec.tarih,r.tarih) >= DUP_MIN_DAYS && diffDays(rec.tarih,r.tarih) <= DUP_MAX_DAYS));
@@ -534,44 +526,42 @@
       onayRecords.push(rec); save('onayRecords',onayRecords); e.target.reset(); renderOnay(); toast('Kayıt eklendi');
     });
 
-    // table action buttons (event delegation)
     document.querySelector('#onayTable').addEventListener('click',(e)=>{
       const btn=e.target.closest('button'); if(!btn) return; const act=btn.getAttribute('data-act'); const idx=Number(btn.getAttribute('data-index'));
       if(act==='edit') openEdit(idx); else if(act==='del') deleteRec(idx);
     });
 
-    // toolbar buttons
     document.getElementById('btnTemplate').addEventListener('click', downloadTemplate);
     document.getElementById('btnImport').addEventListener('click', importFromExcel);
     document.getElementById('btnClearAll').addEventListener('click', clearAllRecords);
 
-    // modal buttons
     document.getElementById('m_cancel').addEventListener('click', (e)=>{e.preventDefault(); closeEdit();});
     document.getElementById('m_save').addEventListener('click', (e)=>{e.preventDefault(); saveEdit();});
 
-    // header filters
     const fmap={ no:'f_no', tarih:'f_tarih', plaka:'f_plaka', firma:'f_firma', km:'f_km', servis:'f_servis', durum:'f_durum', aciklama:'f_aciklama', tutar:'f_tutar', faturaNo:'f_faturaNo', faturaTutar:'f_faturaTutar', fark:'f_fark', yansitma:'f_yansitma' };
     for(const [k,id] of Object.entries(fmap)){ const el=document.getElementById(id); if(el) el.addEventListener('input', ()=>{ filters[k]=el.value; page=1; renderOnay();}); }
 
     renderOnay();
   });
 
-  // ================= LIGHT TESTS (optional) =================
+  // ================= LIGHT TESTS =================
   (function(){ const url=new URL(location.href); if(url.searchParams.get('runTests')!=='1') return; console.log('%c[TEST] start','color:#2563eb');
+    // Mevcut testler
     console.assert(typeof importFromExcel==='function' || true, 'importFromExcel yok');
     const txt='A,B\nC,D'; const arr=txt.split(/\r?\n/); console.assert(arr.length===2,'regex split fail');
     const n1=nextOnayNo('2025-01-01'); const n2=nextOnayNo('2025-12-31'); console.assert(String(n1).startsWith('2025')&&n2===n1+1,'yıl bazlı sayaç');
+    // Ek testler
+    console.assert(toISODate('01.02.25')==='2025-02-01','toISODate dd.mm.yy');
+    console.assert(toISODate('2025-12-31')==='2025-12-31','toISODate iso');
+    console.assert(diffDays('2025-01-01','2025-01-01')===0,'diffDays same day');
     console.log('%c[TEST] ok','color:#16a34a'); })();
-  </script>
-{% endraw %}
-
+</script>
 
   <!-- Firebase Auth: Sekar Filo e‑posta/şifre girişi (yalnızca @sekarfilo.com.tr) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
     (function(){
-      // 1) Firebase yapılandırmanı doldur
       const firebaseConfig = {
         apiKey: "AIzaSyB-xEmeTVN8oiB4FZzV4UpJpAHkyDHYF4U",
         authDomain: "sekar-filo.firebaseapp.com",
@@ -580,10 +570,9 @@
         messagingSenderId: "61274893830",
         appId: "1:61274893830:web:c9dfdf8baf0500178f9d87"
       };
-      try{ firebase.initializeApp(firebaseConfig); }catch(e){ /* yeniden init edilirse sessizce geç */ }
+      try{ firebase.initializeApp(firebaseConfig); }catch(e){}
       const auth = firebase.auth();
 
-      // 2) Basit giriş katmanı (örnektekiyle aynı akış)
       const ov = document.createElement('div');
       ov.id = 'sfLoginOverlay';
       ov.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.08);backdrop-filter:blur(2px);z-index:99999';
@@ -601,13 +590,19 @@
       function showLogin(v){ ov.style.display = v ? 'flex' : 'none'; }
       function err(t){ const el=document.getElementById('sf_err'); if(el) el.textContent=t||''; }
 
-      // 3) Event handlers
       document.addEventListener('click', function(e){
         if(e.target && e.target.id==='sf_login'){
           const m=document.getElementById('sf_mail').value.trim();
           const p=document.getElementById('sf_pass').value;
           if(!/@sekarfilo\.com\.tr$/i.test(m)) return err('Sadece @sekarfilo.com.tr');
-          auth.signInWithEmailAndPassword(m,p).catch(x=>err(x.message||String(x)));
+          auth.signInWithEmailAndPassword(m,p).catch(async (x)=>{
+            if(x && (x.code==='auth/user-not-found' || x.code==='auth/invalid-credential')){
+              const n=document.getElementById('sf_name').value.trim();
+              if(!n) return err('İlk kayıt için "Kullanıcı Adı" alanını da doldurun ve tekrar Giriş’e basın.');
+              try{ await auth.createUserWithEmailAndPassword(m,p); if(auth.currentUser&&n){ await auth.currentUser.updateProfile({displayName:n}); } }
+              catch(e){ return err(e.message||String(e)); }
+            } else { err(x.message||String(x)); }
+          });
         }
         if(e.target && e.target.id==='sf_signup'){
           const m=document.getElementById('sf_mail').value.trim();
@@ -619,23 +614,9 @@
         }
       }, true);
 
-      // 4) Auth durumu: giriş zorunlu
-      let signed = false;
       auth.onAuthStateChanged(user=>{
-        signed = !!(user && /@sekarfilo\.com\.tr$/i.test(user.email||''));
+        const signed = !!(user && /@sekarfilo\.com\.tr$/i.test(user.email||''));
         showLogin(!signed);
-      });
-
-      // 5) Çıkış butonu eklemek isterseniz (üst bar yoksa es geçer)
-      document.addEventListener('DOMContentLoaded', function(){
-        const topbar = document.querySelector('.topbar');
-        if(!topbar) return;
-        const btn = document.createElement('button');
-        btn.textContent = 'Çıkış';
-        btn.className = 'ghost-btn';
-        btn.style.marginLeft = '8px';
-        btn.onclick = ()=> auth.signOut().catch(()=>{});
-        topbar.appendChild(btn);
       });
     })();
   </script>
